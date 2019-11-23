@@ -21,13 +21,16 @@ import math
 import time
 import copy
 import json
+from torch.autograd import Variable
 from torch.utils import data
 from torch.nn.utils.rnn import pack_padded_sequence as pack, pad_packed_sequence as unpack
 from featureFuncs import *
+from featurize_data import matres_label_map, tbd_label_map
 from functools import partial
 from sklearn.model_selection import KFold, ParameterGrid, train_test_split
 from joint_model import pad_collate, EventDataset, BertClassifier
-from gurobi_inference_rel import Global_Inference
+from gurobi_inference import Global_Inference
+from utils import ClassificationReport
 
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
@@ -82,8 +85,6 @@ class NNClassifier(nn.Module):
             ## predict relations                                                                                                  
             out_r, prob_r = model(sents, lengths, fts=fts, rel_idxs=rel_idxs, lidx_start=lidx_start,
                                   lidx_end=lidx_end, ridx_start=ridx_start, ridx_end=ridx_end)
-            #docs.extend(doc)
-            #pairs.extend(pair)
 
             loss_e = []
             ## global inference for each unique context                                                                                  
@@ -202,7 +203,6 @@ class NNClassifier(nn.Module):
             # add filter for events with certain pos tags (based on train set)
             #include_pos = [6, 11, 12, 26, 27, 28, 29, 30, 31] # tbd
             include_pos = [26, 27, 28, 29, 30, 31] # matres
-            #include_pos = [36, 5, 6, 4, 11, 12, 19, 26, 27, 28, 29, 30, 31]
             ent_locs = [[x for x in range(l) if poss[b][x] in include_pos and prob_e[b, x, 1] > ent_thresh] 
                         for b,l in enumerate(lengths)]
 
@@ -228,13 +228,6 @@ class NNClassifier(nn.Module):
                     if (sent_segs > 1) and (len(in_seg) == 0):
                         continue
                     else:
-                        if test:
-                            self.final_output['e1_prob'].append(prob_e[i][r[0]].tolist()[1])
-                            self.final_output['e2_prob'].append(prob_e[i][r[1]].tolist()[1])
-                            self.final_output['e1_span'].append(ent_keys[i][r[0]][1])
-                            self.final_output['e2_span'].append(ent_keys[i][r[1]][1])
-                            self.final_output['doc_id'].append(doc[i])
-                        
                         totl += 1
                         gold_match = [x for x in rels[i] if _is_gold(r[0], x[5][:2]) and _is_gold(r[1], x[5][2:])]
                         # multiple tokens could indicate the same events. 
@@ -242,10 +235,6 @@ class NNClassifier(nn.Module):
                         if len(gold_match) > 0 and gold_match[0][0] not in temp_ids:
                             temp_rels.append(gold_match[0])
                             temp_ids.append(gold_match[0][0])
-                            if test:
-                                self.final_output['e1_id'].append(gold_match[0][1][0])
-                                self.final_output['e2_id'].append(gold_match[0][1][1])
-                                self.final_output['gold_rel'].append(gold_match[0][2])
                         else:
                             ## construct a negative relation pair -- 'NONE'
                             neg_id = 'N%s' % neg_counter
@@ -258,27 +247,9 @@ class NNClassifier(nn.Module):
                                      [float(r[1] - r[0])], False, (r[0], r[0], r[1], r[1]), True)
                             temp_rels.append(a_rel)
                             neg_counter += 1
-                            if test:
-                                self.final_output['e1_id'].append(left_id)
-                                self.final_output['e2_id'].append(right_id)
-                                self.final_output['gold_rel'].append(self._label_to_id['NONE'])
                             
                 nopred_rels.extend([x[2] for x in rels[i] if x[0] not in [tr[0] for tr in temp_rels]])
 
-                if test:
-                    for x in rels[i]:
-                        if x[0] not in [tr[0] for tr in temp_rels]:
-                            self.final_output_np['gold_rel'].append(x[2])
-                            self.final_output_np['pred_rel'].append(self._label_to_id['NONE'])
-                            self.final_output_np['e1_id'].append(x[1][0])
-                            self.final_output_np['e2_id'].append(x[1][1])
-                            self.final_output_np['e1_prob'].append(prob_e[i][x[5][0]].tolist()[1])
-                            self.final_output_np['e2_prob'].append(prob_e[i][x[5][3]].tolist()[1])
-                            self.final_output_np['e1_span'].append(ent_keys[i][x[5][0]][1])
-                            self.final_output_np['e2_span'].append(ent_keys[i][x[5][3]][1])
-                            self.final_output_np['doc_id'].append(doc[i])
-                #assert len(nopred_rels) == 0
-                # B * N_b
                 pred_rels.append(temp_rels)
 
         # relations are (flatten) lists of features
@@ -366,7 +337,7 @@ class NNClassifier(nn.Module):
 
         sents, poss, ftss, labels = [], [], [], []                                                                            
         if args.load_model == True:
-            checkpoint = torch.load(args.ilp_dir + args.load_model_file, map_location='cpu')
+            checkpoint = torch.load(args.load_model_file, map_location='cpu')
             model.load_state_dict(checkpoint['state_dict'])
             epoch = checkpoint['epoch']
             best_eval_f1 = checkpoint['f1']
@@ -696,7 +667,7 @@ class EventEvaluator:
     def __init__(self, model):
         self.model = model
 
-    def evaluate(self, test_data: Iterator[FlatRelation], args):
+    def evaluate(self, test_data, args):
         # load test data first since it needs to be executed twice in this function                                                
         print("start testing...")
 
@@ -763,7 +734,7 @@ if __name__ == '__main__':
     p.add_argument('-num_layers', type=int, default=1)
     p.add_argument('-batch', type=int, default=1)
     p.add_argument('-data_type', type=str, default="red")
-    p.add_argument('-epochs', type=int, default=3)
+    p.add_argument('-epochs', type=int, default=0)
     p.add_argument('-pipe_epoch', type=int, default=1000) # 1000: no pipeline training; otherwise <= epochs 
     p.add_argument('-seed', type=int, default=123)
     p.add_argument('-lr', type=float, default=0.1) # 0.0005, 0.001
@@ -804,7 +775,7 @@ if __name__ == '__main__':
     args.data_dir += args.data_type
     # create pos_tag and vocabulary dictionaries
     # make sure raw data files are stored in the same directory as train/dev/test data
-    tags = open("/nas/home/rujunhan/tcr_output/pos_tags.txt")
+    tags = open(args.other_dir + "/pos_tags.txt")
     pos2idx = {}
     idx = 0
     for tag in tags:
