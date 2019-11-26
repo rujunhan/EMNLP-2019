@@ -4,10 +4,10 @@
 
 **Title**: Codebase for EMNLP 2019 Paper: [Joint Event and Temporal Relation Extraction with Shared Representations and Structured Prediction](https://www.aclweb.org/anthology/D19-1041.pdf) 
 
-1. Data processinng. We have preprocessed TB-Dense and MATRES raw data using internal NLP tools at the Information Sciences Institute. These .pickle files are save in data fold.
+1. Data processinng. We have preprocessed TB-Dense and MATRES raw data using internal NLP tools at the Information Sciences Institute. These .pickle files are saved in data fold. Download glove.6B.50d.txt into other/ folder.
 2. Featurize data. Run featurize_data.py and context_aggregator.py sequentially. Two folders are created: all_joint/ and all_context/. all_context contains the final files used in the model.
 3. Local Model: run joint_model.py
-4. Global Model: save a pipeline_joint model object from step 3 and then run joint_model.py.
+4. Global Model: save a pipeline_joint model object from step 3 and then run joint_model_global.py.
 
 
 ### Code Structure (joint_model.py)
