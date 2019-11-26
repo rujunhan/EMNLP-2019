@@ -2,7 +2,6 @@ from pathlib import Path
 import pickle
 import sys
 import argparse
-from flexnlp import Document
 from collections import defaultdict, Counter, OrderedDict
 from itertools import combinations
 from typing import Iterator, List, Mapping, Union, Optional, Set
@@ -427,7 +426,7 @@ class NNClassifier(nn.Module):
             weights = torch.FloatTensor([1.0, 1.0, 1.0, args.uw, 1.0])
             
         if args.cuda:
-            weights.cuda()
+            weights = weights.cuda()
         
         criterion_r = nn.CrossEntropyLoss(weight=weights) 
         losses = [] 
@@ -786,19 +785,6 @@ if __name__ == '__main__':
     
     args.idx2pos = {v+1:k for k,v in pos2idx.items()}
 
-    args.bert_config = {
-        "attention_probs_dropout_prob": 0.1,
-        "hidden_act": "gelu",
-        "hidden_dropout_prob": 0.1,
-        "hidden_size": 768,
-        "initializer_range": 0.02,
-        "intermediate_size": 3072,
-        "max_position_embeddings": 512,
-        "num_attention_heads": 12,
-        "num_hidden_layers": 12,
-        "type_vocab_size": 2,
-        "vocab_size_or_config_json_file": 30522
-    }
     print(args.hid, args.dropout, args.entity_weight, args.relation_weight)
     main(args)
 

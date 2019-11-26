@@ -291,7 +291,7 @@ def main(args):
         split_and_save(train_docs, dev_docs, data, args.seed, args.save_data_dir)
 
         # quick trick to reduce number of tokens in GloVe                                             
-        reduce_vocab(data + test_data, args.save_data_dir, args.w2i, args.glove)
+        # reduce_vocab(data + test_data, args.save_data_dir, args.w2i, args.glove)
     return
 
 
