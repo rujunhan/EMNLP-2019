@@ -5,7 +5,7 @@ import argparse
 from collections import defaultdict, Counter, OrderedDict
 import random
 import logging as log
-from pytorch_pretrained_bert.modeling import BertModel, BertConfig, PreTrainedBertModel
+from pytorch_pretrained_bert.modeling import BertModel, BertConfig
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 import os
 import torch
@@ -254,7 +254,13 @@ def main(args):
     print(args._label_to_id)
 
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    bert_model = BertModel.from_pretrained('bert-base-uncased')
+
+    if args.load_model_dir:
+        output_model_file = os.path.join(args.load_model_dir, "pytorch_model.bin")
+        model_state_dict = torch.load(output_model_file) 
+        bert_model = BertModel.from_pretrained('bert-base-uncased', state_dict=model_state_dict)
+    else:
+        bert_model = BertModel.from_pretrained('bert-base-uncased')
 
     train_data = pickle.load(open( args.data_dir + "/train.pickle", "rb" ))    
     print("process train...")
@@ -299,10 +305,11 @@ if __name__ == '__main__':
     p = argparse.ArgumentParser()
     p.add_argument('-data_dir', type=str, default = '../data')
     p.add_argument('-other_dir', type=str, default = '../other')
+    p.add_argument('-load_model_dir', type=str, default = '')
     p.add_argument('-train_docs', type=list, default = [])
     p.add_argument('-dev_docs', type=list, default = [])
-    p.add_argument('-split', type=str, default='all_joint')
-    p.add_argument('-data_type', type=str, default='tbd')
+    p.add_argument('-split', type=str, default='bert_all_joint_cosmos')
+    p.add_argument('-data_type', type=str, default='matres')
     p.add_argument('-seed', type=int, default=7)
     args = p.parse_args()
 
